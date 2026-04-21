@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/social-preview.png" alt="TimeNest - network Time Machine server for Mac mini, Raspberry Pi, and any Linux home server" width="820">
+<img src="https://raw.githubusercontent.com/momenbasel/timenest/main/docs/social-preview.png?v=2" alt="TimeNest - network Time Machine server for Mac mini, Raspberry Pi, and any Linux home server" width="900">
 
 ### Network Time Machine for every Mac on your LAN.
 
