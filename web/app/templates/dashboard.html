@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - TimeNest{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+    <div class="rounded-xl border border-ink-800 bg-ink-900 p-5">
+        <div class="text-xs uppercase tracking-wider text-ink-400">Users</div>
+        <div class="mt-2 text-3xl font-semibold">{{ users | length }}</div>
+        <div class="text-xs text-ink-500 mt-1">configured for Time Machine</div>
+    </div>
+
+    <div class="rounded-xl border border-ink-800 bg-ink-900 p-5">
+        <div class="text-xs uppercase tracking-wider text-ink-400">Active sessions</div>
+        <div class="mt-2 text-3xl font-semibold">{{ sessions | length }}</div>
+        <div class="text-xs text-ink-500 mt-1">Macs currently connected</div>
+    </div>
+
+    <div class="rounded-xl border border-ink-800 bg-ink-900 p-5">
+        <div class="text-xs uppercase tracking-wider text-ink-400">Disk used</div>
+        {% if disk %}
+        <div class="mt-2 text-3xl font-semibold">{{ disk.percent }}%</div>
+        <div class="text-xs text-ink-500 mt-1">{{ disk.used_bytes | bytes }} / {{ disk.total_bytes | bytes }}</div>
+        {% else %}
+        <div class="mt-2 text-3xl font-semibold text-ink-500">-</div>
+        <div class="text-xs text-ink-500 mt-1">backup volume not mounted</div>
+        {% endif %}
+    </div>
+
+    <div class="rounded-xl border border-ink-800 bg-ink-900 p-5">
+        <div class="text-xs uppercase tracking-wider text-ink-400">Free space</div>
+        {% if disk %}
+        <div class="mt-2 text-3xl font-semibold">{{ disk.free_bytes | bytes }}</div>
+        <div class="text-xs text-ink-500 mt-1">on {{ backup_path }}</div>
+        {% else %}
+        <div class="mt-2 text-3xl font-semibold text-ink-500">-</div>
+        {% endif %}
+    </div>
+
+</div>
+
+<div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <div class="lg:col-span-2 rounded-xl border border-ink-800 bg-ink-900">
+        <div class="px-5 py-4 border-b border-ink-800 flex items-center justify-between">
+            <div>
+                <div class="font-medium">Users</div>
+                <div class="text-xs text-ink-400">per-user Time Machine targets</div>
+            </div>
+            <a href="/users" class="text-xs text-accent-400 hover:text-accent-300">Manage -&gt;</a>
+        </div>
+        <table class="w-full text-sm">
+            <thead class="text-xs uppercase tracking-wider text-ink-400">
+                <tr>
+                    <th class="text-left px-5 py-2">User</th>
+                    <th class="text-left px-5 py-2">Used</th>
+                    <th class="text-left px-5 py-2">Quota</th>
+                    <th class="text-left px-5 py-2">Last backup</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in users %}
+                <tr class="border-t border-ink-800/60">
+                    <td class="px-5 py-3 font-medium">{{ u.username }}</td>
+                    <td class="px-5 py-3">{{ u.used_bytes | bytes }}</td>
+                    <td class="px-5 py-3">{{ u.quota_gb }} GB</td>
+                    <td class="px-5 py-3 text-ink-300">{{ u.last_backup_ts | ts }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="4" class="px-5 py-10 text-center text-ink-500">
+                    No users yet. <a href="/users" class="text-accent-400 hover:underline">Create one -&gt;</a>
+                </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="rounded-xl border border-ink-800 bg-ink-900">
+        <div class="px-5 py-4 border-b border-ink-800">
+            <div class="font-medium">Live sessions</div>
+            <div class="text-xs text-ink-400">SMB connections currently streaming</div>
+        </div>
+        <ul class="divide-y divide-ink-800/60">
+        {% for s in sessions %}
+            <li class="px-5 py-3 text-sm flex items-center justify-between">
+                <div>
+                    <div class="font-medium">{{ s.user }}</div>
+                    <div class="text-xs text-ink-400">{{ s.machine }} ({{ s.ip }})</div>
+                </div>
+                <span class="text-[10px] uppercase tracking-wider rounded-full bg-emerald-500/10 text-emerald-400 px-2 py-0.5">
+                    {{ s.protocol }}
+                </span>
+            </li>
+        {% else %}
+            <li class="px-5 py-8 text-center text-ink-500 text-sm">Idle.</li>
+        {% endfor %}
+        </ul>
+    </div>
+
+</div>
+
+{% endblock %}

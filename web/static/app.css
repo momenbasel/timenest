@@ -1,0 +1,20 @@
+/* TimeNest admin UI tweaks that do not fit comfortably in Tailwind CDN. */
+
+html { color-scheme: dark; }
+
+body {
+    font-feature-settings: "cv11", "ss01";
+    font-variant-ligatures: none;
+}
+
+code, pre, kbd { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+/* Hide htmx indicators by default, flip them on during a request. */
+.htmx-indicator { display: none; }
+.htmx-request .htmx-indicator { display: inline-flex; }
+
+/* Subtle scrollbar styling for long tables on the users page. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #1f2633; border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: #2a3447; }

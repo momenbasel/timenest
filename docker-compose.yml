@@ -1,0 +1,96 @@
+# TimeNest stack
+#
+# Three services:
+#   samba  - Samba 4 with vfs_fruit for Time Machine
+#   avahi  - Avahi daemon advertising the share as a Time Capsule
+#   web    - FastAPI admin UI + Prometheus metrics
+#
+# Samba and Avahi need `network_mode: host` so mDNS broadcasts and SMB
+# traffic reach the LAN. This also means the SMB_PORT and WEB_PORT
+# variables below are informational only when host networking is used.
+#
+# See README.md for per-platform notes, especially for Docker Desktop on
+# macOS where host networking must be enabled explicitly.
+
+services:
+
+  samba:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGETARCH: ${TARGETARCH:-}
+    image: ghcr.io/momenbasel/timenest-samba:latest
+    container_name: timenest-samba
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-TimeNest}
+      DEVICE_MODEL: ${DEVICE_MODEL:-TimeCapsule8,119}
+      SMB_INTERFACES: ${SMB_INTERFACES:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TIMEZONE:-UTC}
+    volumes:
+      - ${BACKUP_PATH:?BACKUP_PATH must be set in .env}:/backup
+      - ./data/samba:/var/lib/samba
+      - ./data/config:/etc/timenest
+    healthcheck:
+      test: ["CMD", "smbclient", "-L", "//localhost", "-N"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  avahi:
+    image: ghcr.io/momenbasel/timenest-avahi:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: avahi
+    container_name: timenest-avahi
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    environment:
+      SERVER_NAME: ${SERVER_NAME:-TimeNest}
+      DEVICE_MODEL: ${DEVICE_MODEL:-TimeCapsule8,119}
+      TZ: ${TIMEZONE:-UTC}
+    volumes:
+      - ./data/config:/etc/timenest:ro
+    depends_on:
+      - samba
+
+  web:
+    build:
+      context: ./web
+    image: ghcr.io/momenbasel/timenest-web:latest
+    container_name: timenest-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
+      BACKUP_PATH: /backup
+      DEFAULT_QUOTA_GB: ${DEFAULT_QUOTA_GB:-500}
+      ENABLE_METRICS: ${ENABLE_METRICS:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: ${TIMEZONE:-UTC}
+      SAMBA_CONTAINER: timenest-samba
+    volumes:
+      - ${BACKUP_PATH:?BACKUP_PATH must be set in .env}:/backup:ro
+      - ./data/web:/data
+      - ./data/samba:/samba:ro
+      - ./data/config:/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      samba:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

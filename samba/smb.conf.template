@@ -1,0 +1,100 @@
+#
+# TimeNest-generated smb.conf
+#
+# This file is re-rendered on every container start from
+# /etc/timenest/smb.conf.template by scripts/entrypoint-samba.sh.
+# Do not edit by hand inside the container - it will be overwritten.
+#
+# Shares are defined in /etc/timenest/shares.d/*.conf and `include`d at the
+# bottom of this file. The TimeNest web UI writes those fragments when you
+# add or remove users.
+#
+
+[global]
+    # --- identity ---
+    workgroup = WORKGROUP
+    server string = ${SERVER_NAME} (TimeNest)
+    netbios name = ${SERVER_NAME}
+
+    # --- protocol / security ---
+    server min protocol = SMB2_10
+    client min protocol = SMB2_10
+    server smb encrypt = desired
+    smb encrypt = desired
+    server signing = mandatory
+    client signing = mandatory
+    ntlm auth = no
+    map to guest = never
+    restrict anonymous = 2
+
+    # --- Apple interop: vfs_fruit globals ---
+    # These four are REQUIRED for Time Machine over SMB to work correctly.
+    fruit:aapl = yes
+    fruit:nfs_aces = no
+    fruit:model = ${DEVICE_MODEL}
+    fruit:copyfile = yes
+    fruit:posix_rename = yes
+    fruit:veto_appledouble = no
+    fruit:wipe_intentionally_left_blank_rfork = yes
+    fruit:delete_empty_adfiles = yes
+    fruit:metadata = stream
+    fruit:zero_file_id = yes
+
+    # --- Time Machine performance tuning ---
+    # Apple explicitly recommends these (see Samba manual, fruit section).
+    strict locking = no
+    strict sync = no
+    sync always = no
+    use sendfile = yes
+    min receivefile size = 16384
+    aio read size = 1
+    aio write size = 1
+    socket options = TCP_NODELAY IPTOS_LOWDELAY
+
+    # --- interfaces ---
+    bind interfaces only = ${BIND_INTERFACES_ONLY}
+    interfaces = ${SMB_INTERFACES} lo
+
+    # --- logging ---
+    log file = /var/log/samba/log.%m
+    max log size = 1000
+    log level = ${SAMBA_LOG_LEVEL}
+    logging = file
+
+    # --- authentication ---
+    passdb backend = tdbsam:/var/lib/samba/passdb.tdb
+    security = user
+    encrypt passwords = yes
+    smb passwd file = /var/lib/samba/smbpasswd
+
+    # --- disable legacy and noisy features ---
+    load printers = no
+    printing = bsd
+    printcap name = /dev/null
+    disable spoolss = yes
+    show add printer wizard = no
+
+    # --- vfs stack applied to all shares unless overridden ---
+    vfs objects = catia fruit streams_xattr
+
+    # --- include per-user share fragments ---
+    include = /etc/timenest/shares.d/*.conf
+
+# Shares are in /etc/timenest/shares.d/<username>.conf and look like:
+#
+# [username]
+#     path = /backup/username
+#     valid users = username
+#     read only = no
+#     inherit acls = yes
+#     inherit permissions = yes
+#     create mask = 0600
+#     directory mask = 0700
+#     ea support = yes
+#     kernel oplocks = no
+#     kernel share modes = no
+#     posix locking = no
+#     fruit:time machine = yes
+#     fruit:time machine max size = 500G
+#     durable handles = yes
+#     vfs objects = catia fruit streams_xattr

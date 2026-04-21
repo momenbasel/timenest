@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Settings - TimeNest{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block content %}
+
+<div class="rounded-xl border border-ink-800 bg-ink-900 p-6">
+    <div class="font-medium">Current configuration</div>
+    <div class="text-xs text-ink-400 mt-1">Values come from environment variables. Edit
+        <code class="text-ink-200">.env</code> on the host and run
+        <code class="text-ink-200">docker compose up -d</code> to apply.</div>
+
+    <dl class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
+        {% for key, value in settings.items() %}
+        <div class="flex items-center justify-between border-b border-ink-800/60 pb-2">
+            <dt class="text-ink-400 font-mono text-xs">{{ key }}</dt>
+            <dd class="font-medium">{{ value }}</dd>
+        </div>
+        {% endfor %}
+    </dl>
+</div>
+
+<div class="mt-6 rounded-xl border border-ink-800 bg-ink-900 p-6 text-sm text-ink-300 leading-relaxed">
+    <div class="font-medium text-ink-100 mb-2">Rotating the admin password</div>
+    <pre class="bg-ink-950 rounded-md p-4 text-xs text-ink-200 overflow-x-auto"><code>$ sed -i 's/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=new-secret/' .env
+$ docker compose up -d web</code></pre>
+    <p class="mt-3">All sessions are invalidated automatically because the session
+    secret is derived from the admin password on restart.</p>
+</div>
+
+<div class="mt-6 rounded-xl border border-ink-800 bg-ink-900 p-6 text-sm text-ink-300 leading-relaxed">
+    <div class="font-medium text-ink-100 mb-2">Prometheus metrics</div>
+    <p>Scrape target:</p>
+    <pre class="bg-ink-950 rounded-md p-4 text-xs text-ink-200 overflow-x-auto mt-2"><code>scrape_configs:
+  - job_name: timenest
+    static_configs:
+      - targets: ['timenest.local:8080']</code></pre>
+</div>
+
+{% endblock %}

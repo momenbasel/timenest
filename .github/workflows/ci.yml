@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff==0.8.4 mypy==1.13.0
+      - run: ruff check web/
+      - run: mypy --install-types --non-interactive --ignore-missing-imports web/
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ludeeus/action-shellcheck@master
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155
+
+  samba-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate rendered smb.conf
+        run: |
+          sudo apt-get update && sudo apt-get install -y samba-common-bin gettext-base
+          export SERVER_NAME=TimeNest DEVICE_MODEL=TimeCapsule8,119
+          export SMB_INTERFACES="" BIND_INTERFACES_ONLY=no SAMBA_LOG_LEVEL=1
+          mkdir -p /tmp/etc/samba
+          envsubst '${SERVER_NAME} ${DEVICE_MODEL} ${SMB_INTERFACES} ${BIND_INTERFACES_ONLY} ${SAMBA_LOG_LEVEL}' \
+            < samba/smb.conf.template > /tmp/etc/samba/smb.conf
+          testparm -s /tmp/etc/samba/smb.conf

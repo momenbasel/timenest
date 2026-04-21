@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}TimeNest{% endblock %}</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="/static/app.css">
+    <script>
+    tailwind.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                colors: {
+                    ink: {
+                        50:  '#f5f6f8',
+                        100: '#e5e8ee',
+                        200: '#c2c9d6',
+                        300: '#99a3b7',
+                        400: '#6f7a93',
+                        500: '#4a5468',
+                        600: '#333a4a',
+                        700: '#222836',
+                        800: '#171b26',
+                        900: '#0c0f17',
+                        950: '#05070d',
+                    },
+                    accent: {
+                        400: '#7dd3fc',
+                        500: '#38bdf8',
+                        600: '#0284c7',
+                    },
+                }
+            }
+        }
+    };
+    </script>
+</head>
+<body class="bg-ink-950 text-ink-100 min-h-screen font-sans antialiased">
+
+<div class="flex min-h-screen">
+
+    {# ------------------- sidebar ------------------- #}
+    <aside class="w-60 shrink-0 border-r border-ink-800 bg-ink-900/80 backdrop-blur flex flex-col">
+        <div class="px-5 py-6 border-b border-ink-800">
+            <div class="flex items-center gap-3">
+                <svg class="h-8 w-8 text-accent-500" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="16" cy="16" r="12"></circle>
+                    <path d="M16 8 v8 l5 3"></path>
+                </svg>
+                <div>
+                    <div class="font-semibold text-lg tracking-tight">TimeNest</div>
+                    <div class="text-xs text-ink-400">v{{ version }}</div>
+                </div>
+            </div>
+        </div>
+        <nav class="flex-1 py-4 px-2 space-y-1 text-sm">
+            {% set nav = [
+                ('dashboard', '/',        'Dashboard',
+                    'M3 12 L12 3 L21 12 M5 10 V21 H19 V10'),
+                ('users',     '/users',   'Users',
+                    'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M12 11 a4 4 0 1 0 0-8 a4 4 0 0 0 0 8 M22 21v-2 a4 4 0 0 0-3-3.87'),
+                ('disks',     '/disks',   'Storage',
+                    'M2 6 C2 4 22 4 22 6 V18 C22 20 2 20 2 18 Z M2 6 V18 M6 12 L18 12'),
+                ('settings',  '/settings','Settings',
+                    'M12 15 a3 3 0 1 0 0-6 a3 3 0 0 0 0 6 M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z')
+            ] %}
+            {% for key, href, label, d in nav %}
+            <a href="{{ href }}"
+               class="flex items-center gap-3 rounded-md px-3 py-2 transition
+                      {% if page == key %}bg-ink-800 text-white{% else %}text-ink-300 hover:bg-ink-800/60 hover:text-white{% endif %}">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="{{ d }}"></path>
+                </svg>
+                <span>{{ label }}</span>
+            </a>
+            {% endfor %}
+        </nav>
+        <div class="px-4 py-4 border-t border-ink-800 text-xs text-ink-400">
+            <a href="/logout" class="hover:text-white">Sign out</a>
+        </div>
+    </aside>
+
+    {# ------------------- main ------------------- #}
+    <main class="flex-1 overflow-y-auto">
+        <header class="sticky top-0 z-10 bg-ink-950/80 backdrop-blur border-b border-ink-800 px-8 py-4 flex items-center justify-between">
+            <h1 class="text-xl font-semibold tracking-tight">{% block heading %}{% endblock %}</h1>
+            <div class="text-xs text-ink-400 flex items-center gap-2">
+                <span class="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Samba online
+            </div>
+        </header>
+        <section class="px-8 py-8">
+            {% block content %}{% endblock %}
+        </section>
+    </main>
+
+</div>
+
+</body>
+</html>

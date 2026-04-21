@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Storage - TimeNest{% endblock %}
+{% block heading %}Storage{% endblock %}
+{% block content %}
+
+<div class="rounded-xl border border-ink-800 bg-ink-900 p-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="text-xs uppercase tracking-wider text-ink-400">Backup volume</div>
+            <div class="text-lg font-medium mt-1">{{ backup_path }}</div>
+        </div>
+        {% if disk %}
+        <div class="text-right">
+            <div class="text-2xl font-semibold">{{ disk.used_bytes | bytes }} / {{ disk.total_bytes | bytes }}</div>
+            <div class="text-xs text-ink-400">{{ disk.free_bytes | bytes }} free</div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if disk %}
+    <div class="mt-4 h-2 rounded-full bg-ink-800 overflow-hidden">
+        <div class="h-full {% if disk.percent > 90 %}bg-red-500{% elif disk.percent > 75 %}bg-amber-500{% else %}bg-accent-500{% endif %}"
+             style="width: {{ disk.percent }}%"></div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="mt-6">
+    <div class="text-xs uppercase tracking-wider text-ink-400 mb-3">SMART health</div>
+    {% if smart %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for s in smart %}
+        <div class="rounded-xl border border-ink-800 bg-ink-900 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="font-medium">{{ s.model }}</div>
+                    <div class="text-xs text-ink-400">{{ s.device }} - SN {{ s.serial }}</div>
+                </div>
+                {% if s.healthy %}
+                <span class="text-[10px] uppercase tracking-wider rounded-full bg-emerald-500/10 text-emerald-400 px-2 py-0.5">Healthy</span>
+                {% else %}
+                <span class="text-[10px] uppercase tracking-wider rounded-full bg-red-500/10 text-red-400 px-2 py-0.5">Failing</span>
+                {% endif %}
+            </div>
+            <dl class="mt-4 grid grid-cols-3 gap-3 text-sm">
+                <div>
+                    <dt class="text-xs text-ink-400">Temp</dt>
+                    <dd class="mt-0.5">{{ s.temperature_c or '-' }}{% if s.temperature_c %} C{% endif %}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-ink-400">Power on</dt>
+                    <dd class="mt-0.5">{{ s.power_on_hours or '-' }}{% if s.power_on_hours %} h{% endif %}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-ink-400">Est. replace</dt>
+                    <dd class="mt-0.5">{{ s.hours_until_replace_est or '-' }}{% if s.hours_until_replace_est %} h{% endif %}</dd>
+                </div>
+            </dl>
+        </div>
+    {% endfor %}
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-ink-800 bg-ink-900 p-6 text-sm text-ink-400">
+        SMART data unavailable. On Docker Desktop for Mac, raw block devices
+        are not visible to the container. On Linux hosts, ensure the
+        <code class="text-ink-200">smartmontools</code> package is installed
+        and the web container is started with the disk device mapped in
+        <code class="text-ink-200">docker-compose.yml</code> under
+        <code class="text-ink-200">devices:</code>.
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

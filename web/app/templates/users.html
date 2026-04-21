@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Users - TimeNest{% endblock %}
+{% block heading %}Users{% endblock %}
+{% block content %}
+
+{% if created %}
+<div class="mb-6 rounded-md bg-emerald-500/10 border border-emerald-500/30 px-4 py-2 text-sm text-emerald-300">
+    User <span class="font-semibold">{{ created }}</span> created. On the Mac,
+    add the server in Time Machine settings and sign in as
+    <code class="text-emerald-200">{{ created }}</code>.
+</div>
+{% endif %}
+{% if deleted %}
+<div class="mb-6 rounded-md bg-amber-500/10 border border-amber-500/30 px-4 py-2 text-sm text-amber-300">
+    User <span class="font-semibold">{{ deleted }}</span> removed.
+</div>
+{% endif %}
+{% if error %}
+<div class="mb-6 rounded-md bg-red-500/10 border border-red-500/30 px-4 py-2 text-sm text-red-300">
+    {{ error }}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <div class="lg:col-span-2 rounded-xl border border-ink-800 bg-ink-900">
+        <div class="px-5 py-4 border-b border-ink-800 flex items-center justify-between">
+            <div>
+                <div class="font-medium">Configured users</div>
+                <div class="text-xs text-ink-400">{{ users | length }} total</div>
+            </div>
+        </div>
+        <table class="w-full text-sm">
+            <thead class="text-xs uppercase tracking-wider text-ink-400">
+                <tr>
+                    <th class="text-left px-5 py-2">User</th>
+                    <th class="text-left px-5 py-2">Used</th>
+                    <th class="text-left px-5 py-2">Quota</th>
+                    <th class="text-left px-5 py-2">Last backup</th>
+                    <th class="text-right px-5 py-2"></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in users %}
+                <tr class="border-t border-ink-800/60">
+                    <td class="px-5 py-3 font-medium">{{ u.username }}</td>
+                    <td class="px-5 py-3">{{ u.used_bytes | bytes }}</td>
+                    <td class="px-5 py-3">{{ u.quota_gb }} GB</td>
+                    <td class="px-5 py-3 text-ink-300">{{ u.last_backup_ts | ts }}</td>
+                    <td class="px-5 py-3 text-right">
+                        <form method="post" action="/users/{{ u.username }}/delete"
+                              onsubmit="return confirm('Remove {{ u.username }}? Backup data will be kept.');"
+                              class="inline">
+                            <button class="text-xs text-red-400 hover:text-red-300">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="5" class="px-5 py-10 text-center text-ink-500">
+                    No users yet. Add one on the right.
+                </td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <form method="post" action="/users"
+          class="rounded-xl border border-ink-800 bg-ink-900 p-5 space-y-4 h-fit">
+        <div>
+            <div class="font-medium">Create user</div>
+            <div class="text-xs text-ink-400">one per Mac that should back up</div>
+        </div>
+        <label class="block">
+            <span class="text-xs uppercase tracking-wider text-ink-400">Username</span>
+            <input name="username" required pattern="[a-z_][a-z0-9_-]{0,31}"
+                   placeholder="moamen"
+                   class="mt-1 block w-full rounded-md border-ink-700 bg-ink-800 text-ink-100 px-3 py-2 focus:border-accent-500 focus:ring-accent-500 focus:outline-none text-sm">
+            <span class="text-[10px] text-ink-500">lowercase, digits, hyphen, underscore</span>
+        </label>
+        <label class="block">
+            <span class="text-xs uppercase tracking-wider text-ink-400">Password</span>
+            <input name="password" type="password" required minlength="8"
+                   class="mt-1 block w-full rounded-md border-ink-700 bg-ink-800 text-ink-100 px-3 py-2 focus:border-accent-500 focus:ring-accent-500 focus:outline-none text-sm">
+            <span class="text-[10px] text-ink-500">will be entered once on the Mac</span>
+        </label>
+        <label class="block">
+            <span class="text-xs uppercase tracking-wider text-ink-400">Quota (GB)</span>
+            <input name="quota_gb" type="number" value="{{ default_quota_gb }}" min="10" max="100000"
+                   class="mt-1 block w-full rounded-md border-ink-700 bg-ink-800 text-ink-100 px-3 py-2 focus:border-accent-500 focus:ring-accent-500 focus:outline-none text-sm">
+            <span class="text-[10px] text-ink-500">rule of thumb: 2x the Mac's disk size</span>
+        </label>
+        <button class="w-full rounded-md bg-accent-500 hover:bg-accent-400 text-ink-950 font-semibold py-2 transition">
+            Create
+        </button>
+    </form>
+
+</div>
+
+{% endblock %}
