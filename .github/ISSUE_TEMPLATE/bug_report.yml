@@ -1,0 +1,59 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Before submitting, please check existing
+        issues and the troubleshooting section of the README. If your problem is a backup
+        that silently stops working, make sure to share the last 200 lines of
+        `docker compose logs samba` - that is almost always where the answer lives.
+
+  - type: input
+    id: host
+    attributes:
+      label: Host platform
+      placeholder: "e.g. Raspberry Pi 5 8GB running Raspberry Pi OS bookworm"
+    validations:
+      required: true
+
+  - type: input
+    id: arch
+    attributes:
+      label: Architecture
+      placeholder: "linux/arm64, linux/amd64, linux/arm/v7"
+    validations:
+      required: true
+
+  - type: input
+    id: mac
+    attributes:
+      label: Mac making the backup
+      placeholder: "MacBook Pro M2, macOS Sonoma 14.5"
+    validations:
+      required: true
+
+  - type: input
+    id: timenest_version
+    attributes:
+      label: TimeNest version or commit
+      placeholder: "v0.1.0 or git sha"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened
+      placeholder: "Describe the bug and how to reproduce it."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Last 100 lines of `docker compose logs --tail=100` from the affected service.
+      render: shell

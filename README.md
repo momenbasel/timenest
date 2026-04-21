@@ -1,18 +1,17 @@
 <div align="center">
 
-```
-  _______ _                _   _           _   
- |__   __(_)              | \ | |         | |  
-    | |   _ _ __ ___   ___|  \| | ___  ___| |_ 
-    | |  | | '_ ` _ \ / _ \ . ` |/ _ \/ __| __|
-    | |  | | | | | | |  __/ |\  |  __/\__ \ |_ 
-    |_|  |_|_| |_| |_|\___|_| \_|\___||___/\__|
-```
+<img src="docs/social-preview.png" alt="TimeNest - network Time Machine server for Mac mini, Raspberry Pi, and any Linux home server" width="820">
 
 ### Network Time Machine for every Mac on your LAN.
 
-Turn an external drive on a **Mac mini**, **Raspberry Pi**, or **any Linux box** into a
-Time Machine target. Zero cables. Zero Apple Time Capsule. Zero iCloud upsell.
+Turn an external drive on a **Mac mini**, **Raspberry Pi**, or **any Linux home server**
+into a Time Machine target. Zero cables. Zero Apple Time Capsule. Zero iCloud upsell.
+
+> **TimeNest** is a free, open-source, self-hosted **Apple Time Capsule alternative**. It
+> packages Samba 4.18 with `vfs_fruit`, Avahi for Bonjour discovery, and a FastAPI admin
+> UI into one `docker compose` stack, so any Mac on your LAN finds it in Finder and in
+> System Settings -> Time Machine automatically, without typing an IP or mounting an SMB
+> URL. Runs on macOS, Raspberry Pi OS, Debian, Ubuntu, Fedora, and Arch.
 
 <br>
 
@@ -316,6 +315,20 @@ Measured on a 100 GB full backup from a MacBook Pro M2 with `tmutil startbackup 
 | Raspberry Pi 4, 4 GB           | USB 3 SATA SSD 1 TB   | Gigabit   |     27m 30s |             61 |
 | Intel NUC 10, 16 GB            | SATA HDD 4 TB         | Gigabit   |     34m 10s |             49 |
 | Raspberry Pi 4, 4 GB           | USB 2 HDD 2 TB        | Gigabit   |  1h 02m 15s |             27 |
+
+## Projects and products TimeNest replaces
+
+If you arrived here searching for any of the following, this is the project you want. TimeNest is an actively maintained, open-source replacement.
+
+- **Apple Time Capsule** (discontinued 2018) - TimeNest is the functional successor. Drop-in Bonjour advertisement as a `TimeCapsule8,119` so Finder, System Settings, and Migration Assistant all recognize it.
+- **Apple AirPort Time Capsule** - Same use case, newer hardware. Use any USB 3 SSD instead of the built-in drive.
+- **iCloud Backup for Mac** - iCloud does not back up your full disk. TimeNest does.
+- **Backblaze for Mac** - Fine product, but a paid cloud service that charges per Mac. TimeNest is a one-time capital expense (a Raspberry Pi and an SSD).
+- **Synology Time Machine share** - Works great if you already own a Synology. TimeNest is a fit when a full NAS is overkill.
+- **TrueNAS / OpenMediaVault Time Machine plugin** - Again, great if you run one of those. TimeNest is 1/100th the install footprint.
+- **`dperson/samba` + hand-rolled Avahi config** - What most Reddit threads end at. TimeNest is that, but with per-user quotas, a web UI, SMART, metrics, multi-arch images, and a tested `smb.conf`.
+
+Equally useful as a **Mac mini backup server**, a **Raspberry Pi Time Machine server**, a **homelab SMB backup target**, or a **small-office shared Time Machine drive**.
 
 ## Security notes
 

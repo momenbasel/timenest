@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a new capability for TimeNest
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before submitting, check the roadmap in `README.md`. If your idea is already listed,
+        a thumbs-up on the linked issue is more useful than a new one.
+
+        TimeNest is meant to stay small and focused. Features that add runtime dependencies
+        or substantially widen scope need a strong justification.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve
+      placeholder: "Describe the user need. Avoid jumping straight to a solution."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      placeholder: "What should TimeNest do differently?"
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: "Other ways to solve the same problem, and why they are worse."
