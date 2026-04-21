@@ -92,6 +92,39 @@ flowchart LR
     Admin["Admin browser"] -- "https :8080" --> Web
 ```
 
+## Screenshots
+
+<div align="center">
+
+<img src="docs/screenshots/02-dashboard.png" alt="TimeNest dashboard - per-user disk usage, active SMB sessions, live backup status" width="820">
+
+<sub><b>Dashboard</b> - per-user usage, active SMB sessions, and drive health at a glance.</sub>
+
+</div>
+
+<table>
+<tr>
+<td width="50%" align="center">
+<img src="docs/screenshots/03-users.png" alt="TimeNest users page - per-user Time Machine quotas, used space, last backup" width="100%"><br>
+<sub><b>Users</b> - create a Time Machine account per Mac, set a quota, remove in one click.</sub>
+</td>
+<td width="50%" align="center">
+<img src="docs/screenshots/04-storage.png" alt="TimeNest storage page - backup volume usage bar and SMART health panel" width="100%"><br>
+<sub><b>Storage</b> - backup volume usage and per-drive SMART health.</sub>
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<img src="docs/screenshots/05-settings.png" alt="TimeNest settings page - environment configuration, password rotation, Prometheus scrape target" width="100%"><br>
+<sub><b>Settings</b> - environment reference, password rotation, Prometheus scrape target.</sub>
+</td>
+<td width="50%" align="center">
+<img src="docs/screenshots/01-login.png" alt="TimeNest login screen - dark gradient sign-in with TimeNest clock logo" width="100%"><br>
+<sub><b>Sign-in</b> - single admin login; credentials configured via <code>.env</code>.</sub>
+</td>
+</tr>
+</table>
+
 ## Supported hardware
 
 | Host                             | Arch           | Tested | Notes                                      |
