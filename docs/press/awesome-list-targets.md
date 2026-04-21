@@ -2,18 +2,18 @@
 
 Shipped first, then followups ordered by audience size and review cadence.
 
-## Shipped on launch day
+## Shipped on launch day (2026-04-22)
 
-| List                                                                 | Category TimeNest fits in           | PR submitted | Link |
-| -------------------------------------------------------------------- | ----------------------------------- | ------------ | ---- |
-| [awesome-sysadmin](https://github.com/awesome-foss/awesome-sysadmin) | Backups / Storage                   | -            |      |
-| [awesome-raspberry-pi](https://github.com/thibmaek/awesome-raspberry-pi) | Projects                        | -            |      |
-| [awesome-docker](https://github.com/veggiemonk/awesome-docker)       | Projects - Storage                  | -            |      |
-| [awesome-macOS](https://github.com/iCHAIT/awesome-macOS)             | Utilities                           | -            |      |
+| List                                                                      | Category             | PR                                                                          |
+| ------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------- |
+| [awesome-sysadmin](https://github.com/awesome-foss/awesome-sysadmin)      | Backups              | [awesome-foss/awesome-sysadmin#765](https://github.com/awesome-foss/awesome-sysadmin/pull/765) |
+| [awesome-raspberry-pi](https://github.com/thibmaek/awesome-raspberry-pi) | Projects             | [thibmaek/awesome-raspberry-pi#306](https://github.com/thibmaek/awesome-raspberry-pi/pull/306) |
+| [awesome-macOS](https://github.com/iCHAIT/awesome-macOS)                 | Applications/Backup  | [iCHAIT/awesome-macOS#790](https://github.com/iCHAIT/awesome-macOS/pull/790) |
 
-(The "PR submitted" column is filled in at launch by the automation in
-`scripts/submit-awesome-prs.sh`. That script forks each list, writes a
-category entry, opens a PR, and appends the PR URL here.)
+**awesome-selfhosted is covered transitively.** Its Backup tag explicitly
+redirects to `awesome-foss/awesome-sysadmin#backups` in
+`tags/backup.yml`, so a landed PR on awesome-sysadmin propagates to
+awesome-selfhosted's generated markdown automatically.
 
 ## Queued for follow-up (manual review cycles)
 
