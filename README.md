@@ -4,8 +4,10 @@
 
 ### Network Time Machine for every Mac on your LAN.
 
-Turn an external drive on a **Mac mini**, **Raspberry Pi**, or **any Linux home server**
+Turn an external drive on a **Raspberry Pi**, **Intel NUC**, or **any Linux home server**
 into a Time Machine target. Zero cables. Zero Apple Time Capsule. Zero iCloud upsell.
+
+<sub>Already own a Mac mini? Use Apple's built-in [File Sharing -> Time Machine destination](#running-on-a-mac-mini-read-this-first) instead - TimeNest is for hosts that don't already ship a Time Machine server.</sub>
 
 > **TimeNest** is a free, open-source, self-hosted **Apple Time Capsule alternative**. It
 > packages Samba 4.18 with `vfs_fruit`, Avahi for Bonjour discovery, and a FastAPI admin
@@ -127,17 +129,34 @@ flowchart LR
 
 ## Supported hardware
 
-| Host                             | Arch           | Tested | Notes                                      |
-| :------------------------------- | :------------- | :----: | :----------------------------------------- |
-| Mac mini M1 / M2 / M4 (macOS)    | `linux/arm64`  |  Yes   | Docker Desktop with host networking        |
-| Mac mini 2018 (Intel)            | `linux/amd64`  |  Yes   | Docker Desktop                             |
-| Raspberry Pi 5 (8GB) + USB 3 SSD | `linux/arm64`  |  Yes   | Best price / performance ratio             |
-| Raspberry Pi 4 (4GB / 8GB)       | `linux/arm64`  |  Yes   | USB 3 recommended                          |
-| Raspberry Pi 3B+                 | `linux/arm/v7` |   -    | Works but gigabit bottlenecks backup speed |
-| Intel NUC / generic x86 server   | `linux/amd64`  |  Yes   |                                            |
-| ARM VPS (Hetzner, Oracle, AWS)   | `linux/arm64`  |  Yes   | WAN backups need a VPN                     |
+| Host                             | Arch           |   Tested   | Notes                                                 |
+| :------------------------------- | :------------- | :--------: | :---------------------------------------------------- |
+| Raspberry Pi 5 (8GB) + USB 3 SSD | `linux/arm64`  |    Yes     | Best price / performance ratio, recommended target    |
+| Raspberry Pi 4 (4GB / 8GB)       | `linux/arm64`  |    Yes     | USB 3 recommended                                     |
+| Raspberry Pi 3B+                 | `linux/arm/v7` |     -      | Works but gigabit bottlenecks backup speed            |
+| Intel NUC / generic x86 server   | `linux/amd64`  |    Yes     |                                                       |
+| ARM VPS (Hetzner, Oracle, AWS)   | `linux/arm64`  |    Yes     | WAN backups need a VPN                                |
+| Mac mini M1 / M2 / M4 (macOS)    | `linux/arm64`  | Not recommended | **Use native macOS File Sharing instead.** See below. |
+| Mac mini 2018 (Intel)            | `linux/amd64`  | Not recommended | **Use native macOS File Sharing instead.** See below. |
 
 Minimum: 2 cores, 1 GB RAM, 100 Mbit LAN. Recommended: 4 cores, 2 GB RAM, gigabit LAN, USB 3 / SATA SSD target.
+
+> ### Running on a Mac mini? Read this first.
+>
+> macOS already ships a Samba server bound to `:445` and an `mDNSResponder`
+> owning `:5353`. Both are required by AirDrop, Finder network browsing,
+> Handoff, Continuity, and AirPlay discovery. **TimeNest's containers
+> cannot bind those ports without killing those services**, and you do
+> not want to kill those services.
+>
+> If your host is a Mac mini, use Apple's built-in path instead:
+>
+> 1. `System Settings` -> `General` -> `Sharing` -> turn on **File Sharing**.
+> 2. Click the `i` -> `+` under Shared Folders -> select the external drive.
+> 3. Right-click the folder -> `Advanced Options` -> tick **Share as a Time Machine backup destination** -> set a quota if you want.
+> 4. On the other Mac: `System Settings` -> `Time Machine` -> `Add Backup Disk` -> pick the share.
+>
+> Bonjour advertisement is automatic. No Docker, no port conflicts, two minutes of clicking. TimeNest is designed for the case where you **do not** already have a running Time Machine server - Raspberry Pis, Linux boxes, NUCs. Consider it on a Mac mini only if you specifically need the web UI, per-user quotas, or Prometheus metrics, and you are willing to stop the native `smbd` (which disables several OS features).
 
 ## Quick start
 
@@ -165,11 +184,20 @@ curl -fsSL https://raw.githubusercontent.com/momenbasel/timenest/main/install.sh
 
 The installer detects your OS and architecture, installs Docker if missing, prompts for the drive you want to use, writes `.env`, and starts the stack.
 
-### Manual, macOS (Mac mini)
+### Manual, macOS (Mac mini) - **not recommended**
+
+Use [native macOS File Sharing](#running-on-a-mac-mini-read-this-first) instead. It already covers every TimeNest feature except the admin web UI, per-user quotas, Prometheus metrics, and SMART dashboard.
+
+If you still want TimeNest on a Mac mini (for those features), be aware that `:445` and `:5353` are occupied by `smbd` and `mDNSResponder`. You must disable them before running the stack, at the cost of breaking AirDrop / Finder network browse / Handoff / AirPlay discovery:
 
 ```bash
+# DESTRUCTIVE on the Mac mini - breaks OS features. Read the caveat above.
+sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.smbd.plist
+sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.mDNSResponder.plist
+
 brew install --cask docker
 open -a Docker                              # start Docker Desktop
+# Docker Desktop -> Settings -> Resources -> Network -> Enable host networking
 git clone https://github.com/momenbasel/timenest.git
 cd timenest
 cp .env.example .env
@@ -179,7 +207,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Host networking on Docker Desktop for Mac is enabled under **Settings -> Resources -> Network -> Enable host networking**. Without it, Bonjour advertisement will not reach your LAN and you must mount the share by IP.
+To reverse, re-load the LaunchDaemons with `sudo launchctl load -w ...` or reboot.
 
 ### Manual, Debian / Ubuntu / Raspberry Pi OS
 
@@ -392,7 +420,9 @@ Equally useful as a **Mac mini backup server**, a **Raspberry Pi Time Machine se
 
 **Can I put this behind Nextcloud / Synology / TrueNAS?** Those products already ship their own Time Machine support. TimeNest is for the case where you want a minimal, scriptable, self-contained stack on generic hardware.
 
-**Does it work with macOS Ventura, Sonoma, Sequoia, and later?** Yes. Tested on all three. The first backup on Sequoia sometimes requires enabling *Show Legacy File Sharing* once, see [Troubleshooting](#troubleshooting).
+**Does it work with macOS Ventura, Sonoma, Sequoia, and later?** Yes as a *client*. Any modern Mac can back up to a TimeNest server running on Linux or a Raspberry Pi. The first backup on Sequoia sometimes requires enabling *Show Legacy File Sharing* once, see [Troubleshooting](#troubleshooting).
+
+**Can I run the TimeNest server itself on a Mac mini?** Technically yes, practically no. macOS already owns `:445` and `:5353` for its own File Sharing and Bonjour stacks, which TimeNest needs. Use native macOS File Sharing on the Mac mini and run TimeNest on a Raspberry Pi or Linux box instead. See [Running on a Mac mini](#running-on-a-mac-mini-read-this-first).
 
 **Does it work on Windows hosts?** No. Samba + vfs_fruit + Avahi is a Linux stack. WSL2 works but networking is awkward; a spare Pi is easier.
 
