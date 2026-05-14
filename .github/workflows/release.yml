@@ -183,21 +183,21 @@ jobs:
   # ---------------------------------------------------------------------------
   # Bump the Homebrew tap formula.
   #
-  # Runs on the SAME self-hosted Mac so the tap-push PAT lives only on the
-  # runner (TIMENEST_TAP_TOKEN env var) and never enters repo secrets.
+  # Runs on the SAME self-hosted Mac so the auth reuses the runner's already
+  # logged-in `gh` CLI session (`gh auth token`). No PAT, nothing in repo
+  # secrets, nothing to rotate.
   # ---------------------------------------------------------------------------
   bump-tap:
     needs: [macos-pkg, tarball-hash, publish-release]
     runs-on: [self-hosted, macOS, timenest-release]
     steps:
-      - name: Check out tap repo (token from runner env)
-        env:
-          TAP_TOKEN: ${{ env.TIMENEST_TAP_TOKEN }}
+      - name: Clone tap with gh-derived credentials
         run: |
           set -euo pipefail
-          : "${TAP_TOKEN:?TIMENEST_TAP_TOKEN not set on the runner}"
+          command -v gh >/dev/null || { echo "gh CLI missing on runner"; exit 1; }
+          TOKEN="$(gh auth token)"
           rm -rf tap
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/momenbasel/homebrew-timenest.git" tap
+          git clone "https://x-access-token:${TOKEN}@github.com/momenbasel/homebrew-timenest.git" tap
 
       - uses: actions/checkout@v4
         with:

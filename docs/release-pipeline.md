@@ -83,12 +83,18 @@ xcrun notarytool store-credentials timenest-notary \
     --issuer   5de3898a-cd31-4061-850f-ae17b389e46a
 ```
 
-### 3. Tap PAT
+### 3. Tap push credentials
 
-Generate a fine-grained PAT at
-<https://github.com/settings/tokens?type=beta> scoped to repo
-`momenbasel/homebrew-timenest` with `Contents: Read and write`. Paste it
-into `~/actions-runner-timenest/.env` as `TIMENEST_TAP_TOKEN=...`.
+The `bump-tap` job pushes via `gh auth token` on the runner. The Mac is
+already logged in (`gh auth status` shows scopes `gist read:org repo
+user workflow` for `momenbasel`), so no PAT is needed. Verify:
+
+```bash
+gh auth status
+```
+
+If a future re-login drops the `repo` scope, refresh it with
+`gh auth refresh -s repo`.
 
 ### 4. Wire runner env
 
@@ -97,7 +103,6 @@ Edit `~/actions-runner-timenest/.env`:
 ```env
 TIMENEST_SIGN_IDENTITY=Developer ID Installer: Moamen Basel (H3WXHVTP97)
 TIMENEST_NOTARY_PROFILE=AC_NOTARY
-TIMENEST_TAP_TOKEN=github_pat_...
 ```
 
 Then restart the runner service so it picks up the new env:
