@@ -1,3 +1,6 @@
+# typed: false
+# frozen_string_literal: true
+
 # Homebrew formula for TimeNest.
 #
 # Canonical source lives in the main repo at homebrew/timenest.rb. The
@@ -12,9 +15,9 @@ class Timenest < Formula
   desc "Network Time Machine server (Samba + Avahi + admin UI) for Mac, RPi, and Linux"
   homepage "https://github.com/momenbasel/timenest"
   url "https://github.com/momenbasel/timenest/archive/refs/tags/v0.0.0.tar.gz"
+  version "0.0.0"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  version "0.0.0"
 
   depends_on "bash"
 
@@ -61,6 +64,6 @@ class Timenest < Formula
 
   test do
     assert_match "timenest", shell_output("#{bin}/timenest --help")
-    assert_predicate libexec/"docker-compose.yml", :exist?
+    assert_path_exists libexec/"docker-compose.yml"
   end
 end

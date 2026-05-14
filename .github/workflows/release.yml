@@ -22,10 +22,18 @@ env:
 jobs:
 
   # ---------------------------------------------------------------------------
-  # Build + codesign + notarize a macOS .pkg installer
+  # Build + codesign + notarize the macOS .pkg on a SELF-HOSTED Mac runner.
+  #
+  # No Apple cert, notary password, or keychain password is ever stored in
+  # repo secrets. The runner reads:
+  #   - the Developer ID Installer identity from its own login keychain
+  #   - the notary credentials from a notarytool keychain profile
+  #     (created once on the runner via `xcrun notarytool store-credentials`)
+  #
+  # Runner setup is documented in docs/release-pipeline.md.
   # ---------------------------------------------------------------------------
   macos-pkg:
-    runs-on: macos-14
+    runs-on: [self-hosted, macOS, timenest-release]
     outputs:
       pkg_sha256: ${{ steps.hash.outputs.pkg_sha256 }}
       pkg_name:   ${{ steps.hash.outputs.pkg_name }}
@@ -37,59 +45,45 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
+          set -euo pipefail
           v="${TAG#v}"
           echo "version=${v}" >> "$GITHUB_OUTPUT"
 
       - name: Build unsigned .pkg
         run: scripts/build-pkg.sh "${{ steps.ver.outputs.version }}"
 
-      - name: Import Developer ID Installer cert
+      - name: Codesign .pkg (identity from local keychain)
         env:
-          CERT_B64: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_CERT_BASE64 }}
-          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_CERT_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
-          echo "${CERT_B64}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security create-keychain -p "${KEYCHAIN_PASSWORD}" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "$KEYCHAIN"
-          security import "$RUNNER_TEMP/cert.p12" \
-              -k "$KEYCHAIN" \
-              -P "${CERT_PASSWORD}" \
-              -T /usr/bin/productsign \
-              -T /usr/bin/codesign
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
-          security default-keychain -s "$KEYCHAIN"
-          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: \
-              -s -k "${KEYCHAIN_PASSWORD}" "$KEYCHAIN"
-
-      - name: Codesign .pkg
-        env:
-          SIGN_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_IDENTITY }}
+          # SIGN_IDENTITY is set in the runner's environment (e.g. the
+          # service plist or `~/.timenest-runner.env`), NOT in repo
+          # secrets. Example value:
+          #   Developer ID Installer: Greycore Labs (TEAMID12)
+          SIGN_IDENTITY: ${{ env.TIMENEST_SIGN_IDENTITY }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
+          : "${SIGN_IDENTITY:?TIMENEST_SIGN_IDENTITY not set on the runner}"
           UNSIGNED="dist/TimeNest-${VERSION}.pkg"
           SIGNED="dist/TimeNest-${VERSION}-signed.pkg"
           productsign --sign "${SIGN_IDENTITY}" "${UNSIGNED}" "${SIGNED}"
           mv "${SIGNED}" "${UNSIGNED}"
           pkgutil --check-signature "${UNSIGNED}"
 
-      - name: Notarize + staple
+      - name: Notarize + staple (keychain profile)
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          # TIMENEST_NOTARY_PROFILE is the name of the keychain profile
+          # created on the runner with:
+          #   xcrun notarytool store-credentials timenest-notary \
+          #       --apple-id <APPLE_ID> --team-id <TEAM_ID> --password <APP_PASSWORD>
+          # The actual credentials never leave the keychain.
+          NOTARY_PROFILE: ${{ env.TIMENEST_NOTARY_PROFILE }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
+          : "${NOTARY_PROFILE:?TIMENEST_NOTARY_PROFILE not set on the runner}"
           PKG="dist/TimeNest-${VERSION}.pkg"
           xcrun notarytool submit "${PKG}" \
-              --apple-id "${APPLE_ID}" \
-              --team-id "${APPLE_TEAM_ID}" \
-              --password "${APPLE_NOTARY_PASSWORD}" \
+              --keychain-profile "${NOTARY_PROFILE}" \
               --wait
           xcrun stapler staple "${PKG}"
           xcrun stapler validate "${PKG}"
@@ -110,6 +104,10 @@ jobs:
           name: timenest-pkg
           path: dist/*.pkg
           retention-days: 7
+
+      - name: Clean dist on the runner
+        if: always()
+        run: rm -rf dist build
 
   # ---------------------------------------------------------------------------
   # Compute source tarball SHA for the Homebrew formula bump
@@ -183,17 +181,23 @@ jobs:
           files: dist/*.pkg
 
   # ---------------------------------------------------------------------------
-  # Bump the Homebrew tap formula
+  # Bump the Homebrew tap formula.
+  #
+  # Runs on the SAME self-hosted Mac so the auth reuses the runner's already
+  # logged-in `gh` CLI session (`gh auth token`). No PAT, nothing in repo
+  # secrets, nothing to rotate.
   # ---------------------------------------------------------------------------
   bump-tap:
     needs: [macos-pkg, tarball-hash, publish-release]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, timenest-release]
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: momenbasel/homebrew-timenest
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: tap
+      - name: Clone tap with gh-derived credentials
+        run: |
+          set -euo pipefail
+          command -v gh >/dev/null || { echo "gh CLI missing on runner"; exit 1; }
+          TOKEN="$(gh auth token)"
+          rm -rf tap
+          git clone "https://x-access-token:${TOKEN}@github.com/momenbasel/homebrew-timenest.git" tap
 
       - uses: actions/checkout@v4
         with:
@@ -209,11 +213,13 @@ jobs:
           set -euo pipefail
           mkdir -p tap/Formula
           cp src/homebrew/timenest.rb tap/Formula/timenest.rb
-          sed -i \
+          # BSD sed (macOS) needs `-i ''`; GNU sed needs `-i`. Use a portable form.
+          sed -i.bak \
               -e "s|^  url \".*\"|  url \"${TAR_URL}\"|" \
               -e "s|^  sha256 \".*\"|  sha256 \"${TAR_SHA}\"|" \
               -e "s|^  version \".*\"|  version \"${VERSION}\"|" \
               tap/Formula/timenest.rb
+          rm -f tap/Formula/timenest.rb.bak
           grep -E '^  (url|sha256|version) ' tap/Formula/timenest.rb
 
       - name: Commit + push tap update
@@ -230,3 +236,7 @@ jobs:
           fi
           git commit -m "timenest ${VERSION}"
           git push origin HEAD
+
+      - name: Clean tap clone
+        if: always()
+        run: rm -rf tap src
