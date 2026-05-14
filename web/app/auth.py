@@ -13,7 +13,7 @@ from typing import Callable
 from fastapi import Depends, HTTPException, Request, status
 from passlib.hash import bcrypt
 
-from .config import Settings, get_settings
+from .config import Settings
 
 
 def verify_login(username: str, password: str, settings: Settings) -> bool:

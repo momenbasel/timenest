@@ -152,11 +152,20 @@ class SambaManager:
             self.settings.samba_container,
             *args,
         ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            # Translate "docker CLI missing" into RuntimeError so callers
+            # that already catch RuntimeError (list_sessions) degrade
+            # gracefully instead of returning a 500 to the browser.
+            raise RuntimeError(
+                f"{cmd[0]} not found in PATH; install docker CLI or mount "
+                f"the host binary into the web container"
+            ) from exc
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
             raise RuntimeError(

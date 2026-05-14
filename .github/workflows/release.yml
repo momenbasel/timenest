@@ -1,0 +1,232 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Build + codesign + notarize a macOS .pkg installer
+  # ---------------------------------------------------------------------------
+  macos-pkg:
+    runs-on: macos-14
+    outputs:
+      pkg_sha256: ${{ steps.hash.outputs.pkg_sha256 }}
+      pkg_name:   ${{ steps.hash.outputs.pkg_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Resolve version
+        id: ver
+        run: |
+          v="${TAG#v}"
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build unsigned .pkg
+        run: scripts/build-pkg.sh "${{ steps.ver.outputs.version }}"
+
+      - name: Import Developer ID Installer cert
+        env:
+          CERT_B64: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          echo "${CERT_B64}" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" \
+              -k "$KEYCHAIN" \
+              -P "${CERT_PASSWORD}" \
+              -T /usr/bin/productsign \
+              -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: \
+              -s -k "${KEYCHAIN_PASSWORD}" "$KEYCHAIN"
+
+      - name: Codesign .pkg
+        env:
+          SIGN_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_INSTALLER_IDENTITY }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          UNSIGNED="dist/TimeNest-${VERSION}.pkg"
+          SIGNED="dist/TimeNest-${VERSION}-signed.pkg"
+          productsign --sign "${SIGN_IDENTITY}" "${UNSIGNED}" "${SIGNED}"
+          mv "${SIGNED}" "${UNSIGNED}"
+          pkgutil --check-signature "${UNSIGNED}"
+
+      - name: Notarize + staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          PKG="dist/TimeNest-${VERSION}.pkg"
+          xcrun notarytool submit "${PKG}" \
+              --apple-id "${APPLE_ID}" \
+              --team-id "${APPLE_TEAM_ID}" \
+              --password "${APPLE_NOTARY_PASSWORD}" \
+              --wait
+          xcrun stapler staple "${PKG}"
+          xcrun stapler validate "${PKG}"
+
+      - name: SHA-256 the signed pkg
+        id: hash
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          PKG="dist/TimeNest-${VERSION}.pkg"
+          sha=$(shasum -a 256 "${PKG}" | awk '{print $1}')
+          echo "pkg_sha256=${sha}" >> "$GITHUB_OUTPUT"
+          echo "pkg_name=$(basename "${PKG}")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: timenest-pkg
+          path: dist/*.pkg
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Compute source tarball SHA for the Homebrew formula bump
+  # ---------------------------------------------------------------------------
+  tarball-hash:
+    runs-on: ubuntu-latest
+    outputs:
+      tar_sha256: ${{ steps.h.outputs.tar_sha256 }}
+      tar_url:    ${{ steps.h.outputs.tar_url }}
+      version:    ${{ steps.h.outputs.version }}
+    steps:
+      - id: h
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          v="${TAG#v}"
+          url="https://github.com/${REPO}/archive/refs/tags/${TAG}.tar.gz"
+          # GitHub may take ~30s after tag creation to materialize the tarball
+          for i in 1 2 3 4 5; do
+              if curl -fsSLI "${url}" >/dev/null; then break; fi
+              echo "tarball not ready yet (attempt ${i}); sleeping 20s"; sleep 20
+          done
+          sha=$(curl -fsSL "${url}" | sha256sum | awk '{print $1}')
+          echo "version=${v}"     >> "$GITHUB_OUTPUT"
+          echo "tar_sha256=${sha}" >> "$GITHUB_OUTPUT"
+          echo "tar_url=${url}"    >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Publish GitHub release with notarized .pkg attached
+  # ---------------------------------------------------------------------------
+  publish-release:
+    needs: [macos-pkg, tarball-hash]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: timenest-pkg
+          path: dist
+      - name: Compose release body
+        env:
+          PKG_SHA: ${{ needs.macos-pkg.outputs.pkg_sha256 }}
+          TAR_SHA: ${{ needs.tarball-hash.outputs.tar_sha256 }}
+          VERSION: ${{ needs.tarball-hash.outputs.version }}
+        run: |
+          cat > NOTES.md <<EOF
+          ## TimeNest ${TAG}
+
+          ### macOS installer (signed + notarized)
+          \`dist/TimeNest-${VERSION}.pkg\`
+          SHA-256: \`${PKG_SHA}\`
+
+          ### Source tarball
+          SHA-256: \`${TAR_SHA}\`
+
+          ### Docker images
+          All images are signed via cosign (keyless / GitHub OIDC). Verify:
+          \`\`\`
+          cosign verify ghcr.io/momenbasel/timenest-samba:${VERSION} \\
+              --certificate-identity-regexp 'https://github.com/momenbasel/timenest/' \\
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          \`\`\`
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: TimeNest ${{ env.TAG }}
+          body_path: NOTES.md
+          files: dist/*.pkg
+
+  # ---------------------------------------------------------------------------
+  # Bump the Homebrew tap formula
+  # ---------------------------------------------------------------------------
+  bump-tap:
+    needs: [macos-pkg, tarball-hash, publish-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: momenbasel/homebrew-timenest
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          ref: ${{ env.TAG }}
+
+      - name: Rewrite Formula/timenest.rb
+        env:
+          VERSION: ${{ needs.tarball-hash.outputs.version }}
+          TAR_URL: ${{ needs.tarball-hash.outputs.tar_url }}
+          TAR_SHA: ${{ needs.tarball-hash.outputs.tar_sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p tap/Formula
+          cp src/homebrew/timenest.rb tap/Formula/timenest.rb
+          sed -i \
+              -e "s|^  url \".*\"|  url \"${TAR_URL}\"|" \
+              -e "s|^  sha256 \".*\"|  sha256 \"${TAR_SHA}\"|" \
+              -e "s|^  version \".*\"|  version \"${VERSION}\"|" \
+              tap/Formula/timenest.rb
+          grep -E '^  (url|sha256|version) ' tap/Formula/timenest.rb
+
+      - name: Commit + push tap update
+        working-directory: tap
+        env:
+          VERSION: ${{ needs.tarball-hash.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name  "timenest-release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git add Formula/timenest.rb
+          if git diff --cached --quiet; then
+              echo "no changes; nothing to commit"; exit 0
+          fi
+          git commit -m "timenest ${VERSION}"
+          git push origin HEAD

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# TimeNest CLI wrapper.
+#
+# Installed by Homebrew and the macOS .pkg into PATH. Thin shim over
+# `docker compose` so users don't have to remember the compose file path.
+#
+# Usage:
+#   timenest up            # start the stack (detached)
+#   timenest down          # stop the stack
+#   timenest logs [svc]    # tail logs for one or all services
+#   timenest status        # show container status
+#   timenest update        # pull latest images and recreate
+#   timenest path          # print the install dir
+#   timenest version       # print the installed version
+
+set -euo pipefail
+
+# TIMENEST_HOME is set by the Homebrew formula / .pkg postinstall script.
+# Fall back to ~/timenest for source installs.
+TIMENEST_HOME="${TIMENEST_HOME:-$HOME/timenest}"
+COMPOSE_FILE="${TIMENEST_HOME}/docker-compose.yml"
+VERSION_FILE="${TIMENEST_HOME}/.version"
+
+die() { printf 'timenest: %s\n' "$*" >&2; exit 1; }
+
+[ -f "$COMPOSE_FILE" ] || die "compose file not found at $COMPOSE_FILE; reinstall TimeNest"
+command -v docker >/dev/null 2>&1 || die "docker is required; install Docker Desktop from https://www.docker.com/"
+
+cmd="${1:-status}"
+shift || true
+
+case "$cmd" in
+    up)      exec docker compose -f "$COMPOSE_FILE" --project-directory "$TIMENEST_HOME" up -d "$@" ;;
+    down)    exec docker compose -f "$COMPOSE_FILE" --project-directory "$TIMENEST_HOME" down "$@" ;;
+    logs)    exec docker compose -f "$COMPOSE_FILE" --project-directory "$TIMENEST_HOME" logs -f "$@" ;;
+    status|ps)
+             exec docker compose -f "$COMPOSE_FILE" --project-directory "$TIMENEST_HOME" ps "$@" ;;
+    update)
+             docker compose -f "$COMPOSE_FILE" --project-directory "$TIMENEST_HOME" pull
+             exec docker compose -f "$COMPOSE_FILE" --project-directory "$TIMENEST_HOME" up -d "$@"
+             ;;
+    path)    printf '%s\n' "$TIMENEST_HOME" ;;
+    version) [ -f "$VERSION_FILE" ] && cat "$VERSION_FILE" || echo "unknown" ;;
+    -h|--help|help)
+        cat <<'USAGE'
+timenest - manage your TimeNest Time Machine server
+
+  up         Start the stack (docker compose up -d)
+  down       Stop the stack
+  logs [svc] Tail logs for all services or one service
+  status     Show container status (alias: ps)
+  update     Pull latest images and recreate
+  path       Print TIMENEST_HOME
+  version    Print installed version
+USAGE
+        ;;
+    *) die "unknown command '$cmd' (run 'timenest help')" ;;
+esac
