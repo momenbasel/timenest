@@ -31,34 +31,57 @@ on GitHub by default.
 
 ## One-time bootstrap on the Mac runner
 
-### 1. Apple certificates
+State of this machine, recorded for reference:
 
-```bash
-security find-identity -v -p basic | grep "Developer ID"
-```
+| Component                       | Status                                          |
+|---------------------------------|-------------------------------------------------|
+| Tap repo `momenbasel/homebrew-timenest` | created (public, seeded with Formula)   |
+| Self-hosted runner              | registered + launchd service installed, online  |
+| `Developer ID Application` cert | present in login keychain                        |
+| `Developer ID Installer` cert   | **NOT YET ISSUED** - see step 1                  |
+| notarytool keychain profile     | `AC_NOTARY` already exists (ASC API key based)  |
+| App Store Connect API key       | `~/.appstoreconnect/private_keys/AuthKey_5G7R52L8RK.p8` |
 
-You need **`Developer ID Installer`** (productsign for `.pkg`). If you
-only see `Developer ID Application`, request the Installer cert here:
-<https://developer.apple.com/account/resources/certificates/list>
-(certificate type "Developer ID Installer"). Generate a CSR with Keychain
-Access > Certificate Assistant, upload it, download + double-click to
-install in your login keychain.
+### 1. Apple `Developer ID Installer` certificate (the only manual step)
+
+`productsign` requires this specific cert type. Apple's App Store
+Connect API does NOT expose certificate creation for the Developer ID
+Installer variant - only the Application and Kext variants - so this is
+the one step that has to happen in a browser.
+
+A CSR has already been generated and is waiting at
+`~/.timenest-release-bootstrap/timenest-installer.csr`. To finish:
+
+1. Sign in at <https://developer.apple.com/account/resources/certificates/add>
+2. Choose certificate type **Developer ID Installer**
+3. Upload the CSR file above
+4. Download the resulting `.cer` and double-click to install in the
+   login keychain
+5. Verify: `security find-identity -v -p basic | grep "Developer ID Installer"`
+6. Copy the identity string and put it in the runner `.env` (step 4)
+
+The matching private key lives at
+`~/.timenest-release-bootstrap/timenest-installer.key` - keep it next
+to the keychain in case the keychain entry is ever rebuilt.
 
 ### 2. Notary keychain profile
 
-Generate an app-specific password at
-<https://appleid.apple.com/account/manage> > Sign-In and Security >
-App-Specific Passwords. Label it `timenest-notary`. Then:
+Already done on this machine: profile `AC_NOTARY` was created with the
+App Store Connect API key. Verify with:
+
+```bash
+xcrun notarytool history --keychain-profile AC_NOTARY | head
+```
+
+To create a fresh TimeNest-scoped profile instead (optional, the
+existing one already works):
 
 ```bash
 xcrun notarytool store-credentials timenest-notary \
-    --apple-id "<your@apple.id>" \
-    --team-id  "H3WXHVTP97" \
-    --password "<app-specific-password>"
+    --key      ~/.appstoreconnect/private_keys/AuthKey_5G7R52L8RK.p8 \
+    --key-id   5G7R52L8RK \
+    --issuer   5de3898a-cd31-4061-850f-ae17b389e46a
 ```
-
-The password is now stored encrypted in the login keychain. The runner
-reads it only when notarytool is invoked.
 
 ### 3. Tap PAT
 
@@ -73,7 +96,7 @@ Edit `~/actions-runner-timenest/.env`:
 
 ```env
 TIMENEST_SIGN_IDENTITY=Developer ID Installer: Moamen Basel (H3WXHVTP97)
-TIMENEST_NOTARY_PROFILE=timenest-notary
+TIMENEST_NOTARY_PROFILE=AC_NOTARY
 TIMENEST_TAP_TOKEN=github_pat_...
 ```
 
