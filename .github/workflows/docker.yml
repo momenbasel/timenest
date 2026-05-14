@@ -14,6 +14,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   OWNER: ${{ github.repository_owner }}
+  COSIGN_VERSION: v2.4.1
 
 jobs:
 
@@ -22,6 +23,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -42,6 +44,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context: .
           file: Dockerfile
@@ -52,12 +55,30 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=samba
           cache-to:   type=gha,scope=samba,mode=max
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign image (keyless / GitHub OIDC)
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          echo "${TAGS}" | while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            echo "signing ${tag}@${DIGEST}"
+            cosign sign --yes "${tag}@${DIGEST}"
+          done
 
   avahi:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -78,6 +99,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context: .
           file: Dockerfile
@@ -88,12 +110,29 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=avahi
           cache-to:   type=gha,scope=avahi,mode=max
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign image (keyless / GitHub OIDC)
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          echo "${TAGS}" | while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            cosign sign --yes "${tag}@${DIGEST}"
+          done
 
   web:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -114,6 +153,7 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
       - uses: docker/build-push-action@v6
+        id: build
         with:
           context: ./web
           platforms: linux/amd64,linux/arm64
@@ -122,3 +162,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to:   type=gha,scope=web,mode=max
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign image (keyless / GitHub OIDC)
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          echo "${TAGS}" | while IFS= read -r tag; do
+            [ -z "${tag}" ] && continue
+            cosign sign --yes "${tag}@${DIGEST}"
+          done

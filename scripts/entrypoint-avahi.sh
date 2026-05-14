@@ -17,6 +17,7 @@ export SERVER_NAME DEVICE_MODEL
 
 mkdir -p /etc/avahi/services
 
+# shellcheck disable=SC2016  # single quotes intentional; envsubst reads literal ${VAR} list
 envsubst '${SERVER_NAME} ${DEVICE_MODEL}' \
     < /etc/timenest/timenest.service.template \
     > /etc/avahi/services/timenest.service

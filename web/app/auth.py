@@ -8,12 +8,12 @@ attack surface.
 from __future__ import annotations
 
 import secrets
-from typing import Callable
+from typing import cast
 
 from fastapi import Depends, HTTPException, Request, status
 from passlib.hash import bcrypt
 
-from .config import Settings, get_settings
+from .config import Settings
 
 
 def verify_login(username: str, password: str, settings: Settings) -> bool:
@@ -47,4 +47,7 @@ def require_login(request: Request) -> str:
     return user
 
 
-LoginDep: Callable[..., str] = Depends(require_login)
+# Runtime value is `fastapi.params.Depends`, but FastAPI substitutes the
+# resolved string at call time. Cast so endpoints can declare `user: str = LoginDep`
+# without mypy complaining about a Callable default for a str argument.
+LoginDep: str = cast(str, Depends(require_login))

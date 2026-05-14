@@ -46,6 +46,7 @@ mkdir -p /etc/samba /etc/timenest/shares.d /var/lib/samba/private /var/log/samba
 
 # The template uses ${VAR} syntax - envsubst only replaces explicitly
 # listed vars to avoid accidentally eating literal `$` in comments.
+# shellcheck disable=SC2016  # single quotes intentional; envsubst reads literal ${VAR} list
 envsubst '${SERVER_NAME} ${DEVICE_MODEL} ${SMB_INTERFACES} ${BIND_INTERFACES_ONLY} ${SAMBA_LOG_LEVEL}' \
     < /etc/timenest/smb.conf.template \
     > /etc/samba/smb.conf
