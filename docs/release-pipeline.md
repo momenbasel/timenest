@@ -3,73 +3,140 @@
 Triggered by pushing a `v*` tag (or via `workflow_dispatch`). One tag push
 produces:
 
-| Artifact                                      | Workflow              | Signing |
-|-----------------------------------------------|-----------------------|---------|
-| `ghcr.io/momenbasel/timenest-{samba,avahi,web}` multi-arch images | `docker.yml`     | cosign keyless (GitHub OIDC) |
-| `dist/TimeNest-<version>.pkg` (macOS installer)                   | `release.yml`    | Developer ID Installer + notarytool staple |
-| GitHub release with `.pkg` attached                               | `release.yml`    | - |
-| `momenbasel/homebrew-timenest` formula bump commit                | `release.yml`    | - |
+| Artifact                                                          | Where it runs     | Signing |
+|-------------------------------------------------------------------|-------------------|---------|
+| `ghcr.io/momenbasel/timenest-{samba,avahi,web}` multi-arch images | github-hosted     | cosign keyless (GitHub OIDC, no secrets) |
+| `dist/TimeNest-<version>.pkg` (macOS installer)                   | **self-hosted Mac** | Developer ID Installer + notarytool staple |
+| GitHub release with `.pkg` attached                               | github-hosted     | - |
+| `momenbasel/homebrew-timenest` formula bump commit                | **self-hosted Mac** | - |
 
-## Required repository secrets
+**No signing secrets ever live in GitHub.** The Apple cert + notary
+credentials + tap PAT all live in the self-hosted runner's local
+keychain and `.env`. Repo secrets are not used by `release.yml` for
+anything sensitive.
 
-| Secret                                       | Purpose |
-|----------------------------------------------|---------|
-| `APPLE_DEVELOPER_ID_INSTALLER_CERT_BASE64`   | `base64 < DeveloperIDInstaller.p12` of the exported "Developer ID Installer" certificate. |
-| `APPLE_DEVELOPER_ID_INSTALLER_CERT_PASSWORD` | Password used when exporting the .p12 above. |
-| `APPLE_DEVELOPER_ID_INSTALLER_IDENTITY`      | Exact identity string, e.g. `Developer ID Installer: Greycore Labs (TEAMID12)`. |
-| `APPLE_KEYCHAIN_PASSWORD`                    | Throwaway password the runner uses to create + unlock the build keychain. |
-| `APPLE_ID`                                   | Apple Developer account email. |
-| `APPLE_TEAM_ID`                              | 10-character Team ID from the Developer portal. |
-| `APPLE_NOTARY_PASSWORD`                      | App-specific password generated at appleid.apple.com (NOT your Apple ID password). |
-| `HOMEBREW_TAP_TOKEN`                         | Fine-grained PAT with `Contents: read/write` on `momenbasel/homebrew-timenest`. |
+## Why self-hosted
 
-`cosign` itself needs no secrets - the docker workflow already requests
-`id-token: write` and signs against the public Sigstore Fulcio root
-using GitHub's OIDC token.
+This repo is public. Storing the Apple Developer ID certificate,
+app-specific notary password, or a PAT in GitHub Actions secrets would
+expose them via any workflow_run with malicious code (eg. a compromised
+third-party action). Running the signing job on a personal Mac removes
+that blast radius entirely. The github-hosted jobs (`tarball-hash`,
+`publish-release`, image build + cosign) never touch the sensitive
+material.
 
-## One-time bootstrap
+The runner is registered for tag-triggered workflows only - PRs cannot
+reach it. PRs from forks never receive secrets nor self-hosted runners
+on GitHub by default.
 
-1. **Create the tap repo.** `gh repo create momenbasel/homebrew-timenest --public --description "Homebrew tap for TimeNest"` then push an initial commit containing only `README.md`. The release workflow writes `Formula/timenest.rb` on first run.
-2. **Generate the Apple cert.** In Xcode > Settings > Accounts, request a "Developer ID Installer" certificate. Export it to `.p12` with a password. `base64 < cert.p12 | pbcopy` and paste into `APPLE_DEVELOPER_ID_INSTALLER_CERT_BASE64`.
-3. **App-specific password.** Sign in at appleid.apple.com > Sign-In and Security > App-Specific Passwords > Generate. Label it `timenest-notary`. This is `APPLE_NOTARY_PASSWORD`.
-4. **PAT for the tap.** github.com > Settings > Developer settings > Fine-grained tokens > Generate. Scope it to the `homebrew-timenest` repo with `Contents: read and write`. Paste into `HOMEBREW_TAP_TOKEN`.
+## One-time bootstrap on the Mac runner
+
+### 1. Apple certificates
+
+```bash
+security find-identity -v -p basic | grep "Developer ID"
+```
+
+You need **`Developer ID Installer`** (productsign for `.pkg`). If you
+only see `Developer ID Application`, request the Installer cert here:
+<https://developer.apple.com/account/resources/certificates/list>
+(certificate type "Developer ID Installer"). Generate a CSR with Keychain
+Access > Certificate Assistant, upload it, download + double-click to
+install in your login keychain.
+
+### 2. Notary keychain profile
+
+Generate an app-specific password at
+<https://appleid.apple.com/account/manage> > Sign-In and Security >
+App-Specific Passwords. Label it `timenest-notary`. Then:
+
+```bash
+xcrun notarytool store-credentials timenest-notary \
+    --apple-id "<your@apple.id>" \
+    --team-id  "H3WXHVTP97" \
+    --password "<app-specific-password>"
+```
+
+The password is now stored encrypted in the login keychain. The runner
+reads it only when notarytool is invoked.
+
+### 3. Tap PAT
+
+Generate a fine-grained PAT at
+<https://github.com/settings/tokens?type=beta> scoped to repo
+`momenbasel/homebrew-timenest` with `Contents: Read and write`. Paste it
+into `~/actions-runner-timenest/.env` as `TIMENEST_TAP_TOKEN=...`.
+
+### 4. Wire runner env
+
+Edit `~/actions-runner-timenest/.env`:
+
+```env
+TIMENEST_SIGN_IDENTITY=Developer ID Installer: Moamen Basel (H3WXHVTP97)
+TIMENEST_NOTARY_PROFILE=timenest-notary
+TIMENEST_TAP_TOKEN=github_pat_...
+```
+
+Then restart the runner service so it picks up the new env:
+
+```bash
+cd ~/actions-runner-timenest && ./svc.sh stop && ./svc.sh start
+```
+
+### 5. Runner status
+
+```bash
+gh api repos/momenbasel/timenest/actions/runners --jq '.runners[]'
+# Should show status: online with labels self-hosted,macOS,ARM64,timenest-release
+```
 
 ## Cutting a release
 
-```
+```bash
 git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
 ```
 
 That fires:
 
-1. `docker.yml` - builds + signs all three images for the new tag.
-2. `release.yml` - builds, signs, and notarizes the `.pkg`; computes the tarball SHA; publishes the GitHub release with the `.pkg` attached; pushes a formula-bump commit to the tap.
+1. `docker.yml` (github-hosted) - builds + cosign-signs all three images.
+2. `release.yml`:
+   - `macos-pkg` (self-hosted) - builds, signs, notarizes, staples the `.pkg`.
+   - `tarball-hash` (github-hosted) - SHA-256s the source tarball.
+   - `publish-release` (github-hosted) - creates the GitHub release with `.pkg` attached.
+   - `bump-tap` (self-hosted) - pushes a formula bump commit to the tap.
 
 ## Verifying the artifacts
 
 ```bash
-# Verify a Docker image's cosign signature
+# Docker image cosign signature
 cosign verify ghcr.io/momenbasel/timenest-web:v0.2.0 \
     --certificate-identity-regexp 'https://github.com/momenbasel/timenest/' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-# Verify the macOS installer's signature + notarization
+# .pkg signature + notarization staple
 pkgutil --check-signature dist/TimeNest-0.2.0.pkg
 spctl --assess --type install --verbose dist/TimeNest-0.2.0.pkg
 
-# Verify the Homebrew install path
+# Homebrew install path
 brew tap momenbasel/timenest
 brew install --formula timenest
 timenest version
 ```
 
-## Local repro of the .pkg build
+## Local repro of the .pkg build (unsigned)
 
 ```bash
 scripts/build-pkg.sh 0.2.0
 # Output: dist/TimeNest-0.2.0.pkg  (unsigned)
 ```
 
-The codesign + notarize steps live in `release.yml` only; running them
-locally requires the same secrets installed in your keychain.
+To sign + notarize locally (requires the same env vars set):
+
+```bash
+productsign --sign "$TIMENEST_SIGN_IDENTITY" \
+    dist/TimeNest-0.2.0.pkg dist/TimeNest-0.2.0-signed.pkg
+xcrun notarytool submit dist/TimeNest-0.2.0-signed.pkg \
+    --keychain-profile "$TIMENEST_NOTARY_PROFILE" --wait
+xcrun stapler staple dist/TimeNest-0.2.0-signed.pkg
+```
