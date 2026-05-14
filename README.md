@@ -176,6 +176,16 @@ Then open `http://<server-ip>:8080`, log in with the admin password you set, cre
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew tap momenbasel/timenest
+brew install timenest
+timenest up
+```
+
+`timenest up` wraps `docker compose up -d` against the bundled stack. See `timenest help` for the rest. Docker Desktop or OrbStack is required and the formula prints a caveat if it is missing.
+
 ### One-liner (Linux, Raspberry Pi, WSL)
 
 ```bash
@@ -397,6 +407,21 @@ Equally useful as a **Mac mini backup server**, a **Raspberry Pi Time Machine se
 - SMB signing is enabled by default. SMB1 is disabled. TLS on the web UI is handled via a reverse proxy (a Caddy example is provided in `docs/`).
 - TimeNest never reads backup contents. Time Machine sparsebundles can be fully encrypted at creation time on the Mac side and you are encouraged to do so.
 - Admin credentials are stored as bcrypt hashes under `./data/auth.db`. Samba users are stored in Samba's native `passdb.tdb`.
+
+### Verifying release artifacts
+
+All published Docker images are signed with [cosign](https://github.com/sigstore/cosign) using keyless GitHub OIDC, and the macOS `.pkg` is signed with a Developer ID Installer certificate and notarized by Apple. Verify before running:
+
+```bash
+# Docker images
+cosign verify ghcr.io/momenbasel/timenest-samba:latest \
+    --certificate-identity-regexp 'https://github.com/momenbasel/timenest/' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# macOS .pkg (after downloading from a GitHub release)
+pkgutil --check-signature TimeNest-*.pkg
+spctl --assess --type install --verbose TimeNest-*.pkg
+```
 
 ## Roadmap
 
